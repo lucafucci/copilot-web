@@ -9,7 +9,7 @@ Web-based graphical interface to interact with GitHub Copilot CLI through your b
 ## Project Structure
 
 ```
-/home/beelink/docker/copilot-web/
+copilot-web/
 ├── Dockerfile                 # Debian Slim + Node.js 22 + Copilot CLI
 ├── package.json              # Dependencies: express, ws
 ├── .dockerignore
@@ -44,41 +44,45 @@ RUN curl -fsSL https://github.com/github/copilot-cli/releases/latest/download/co
 
 **Required Environment Variables**:
 - `COPILOT_GITHUB_TOKEN` (or `GH_TOKEN` or `GITHUB_TOKEN`)
-- `TZ=Europe/Rome`
+- `TZ` (your timezone, e.g., `America/New_York`, `Europe/London`)
 
 **Mounted Volumes**:
-- `/home/beelink/.config:/root/.config` (to persist Copilot credentials)
+- `~/.config:/root/.config` (to persist Copilot credentials)
 
 ## Integration
 
 ### docker-compose.yml
 ```yaml
-copilot-web:
-  build: /home/beelink/docker/copilot-web
-  container_name: copilot-web
-  restart: unless-stopped
-  networks:
-    - traefik
-  environment:
-    - TZ=Europe/Rome
-    - GH_TOKEN=${GH_TOKEN}
-    - GITHUB_TOKEN=${GH_TOKEN}
-    - COPILOT_GITHUB_TOKEN=${GH_TOKEN}
-  volumes:
-    - /home/beelink/.config:/root/.config
-  labels:
-    - traefik.enable=true
-    - traefik.http.routers.copilot-web.rule=Host(`copilot.${DOMAIN}`)
-    - traefik.http.routers.copilot-web.entrypoints=websecure
-    - traefik.http.routers.copilot-web.tls.certresolver=cloudflare
-    - traefik.http.services.copilot-web.loadbalancer.server.port=3000
-    - wud.watch=true
+services:
+  copilot-web:
+    build: ./copilot-web
+    container_name: copilot-web
+    restart: unless-stopped
+    networks:
+      - traefik
+    environment:
+      - TZ=America/New_York  # Change to your timezone
+      - GH_TOKEN=${GH_TOKEN}
+      - GITHUB_TOKEN=${GH_TOKEN}
+      - COPILOT_GITHUB_TOKEN=${GH_TOKEN}
+    volumes:
+      - ~/.config:/root/.config  # Persist Copilot OAuth credentials
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.copilot-web.rule=Host(`copilot.example.com`)  # Change domain
+      - traefik.http.routers.copilot-web.entrypoints=websecure
+      - traefik.http.routers.copilot-web.tls.certresolver=cloudflare
+      - traefik.http.services.copilot-web.loadbalancer.server.port=3000
+
+networks:
+  traefik:
+    external: true
 ```
 
 ### Reverse Proxy (Traefik)
-- **URL**: https://copilot.yourdomain.com
+- **URL**: https://copilot.example.com (configure your domain)
 - **SSL**: Automatic certificate via Let's Encrypt/Cloudflare
-- **Auth**: None (can be added with Authentik or similar)
+- **Auth**: None (can be added with any SSO provider)
 
 ## Issues Encountered
 
@@ -214,12 +218,12 @@ docker compose build copilot-web && docker compose up -d copilot-web
    ```
 
 2. **Test Functionality**
-   - Open https://copilot.yourdomain.com
+   - Open https://copilot.example.com (your configured domain)
    - Send message "how does docker work?"
    - Verify response
 
 3. **Future Improvements** (optional):
-   - Add Authentik SSO
+   - Add SSO/authentication (OAuth, SAML, etc.)
    - Token-by-token response streaming
    - Conversation history
    - Multi-session support
