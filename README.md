@@ -1,55 +1,55 @@
 # Copilot Web Interface
 
-Interfaccia web per GitHub Copilot CLI creata da zero durante la sessione del 23 dicembre 2025.
+A web interface for GitHub Copilot CLI built from scratch.
 
-## Obiettivo
+## Overview
 
-Creare un'interfaccia web grafica per usare GitHub Copilot CLI tramite browser, accessibile su https://copilot.fujipi.com
+Web-based graphical interface to interact with GitHub Copilot CLI through your browser, providing a ChatGPT-like experience for AI-assisted coding.
 
-## Struttura Progetto
+## Project Structure
 
 ```
 /home/beelink/docker/copilot-web/
 ├── Dockerfile                 # Debian Slim + Node.js 22 + Copilot CLI
-├── package.json              # Dipendenze: express, ws
+├── package.json              # Dependencies: express, ws
 ├── .dockerignore
 ├── src/
-│   └── server.js            # Backend Node.js con WebSocket
+│   └── server.js            # Node.js backend with WebSocket
 └── public/
-    └── index.html           # Frontend con chat interface
+    └── index.html           # Frontend chat interface
 ```
 
-## Architettura
+## Architecture
 
 ### Backend (Node.js + Express + WebSocket)
-- **Server HTTP**: Express sulla porta 3000
-- **WebSocket**: Comunicazione real-time client-server
-- **Esecuzione Copilot**: Spawna processi `copilot -p "<prompt>" --allow-all-tools` per ogni messaggio
-- **Modalità**: Non-interattiva (ogni messaggio è un comando separato)
+- **HTTP Server**: Express on port 3000
+- **WebSocket**: Real-time client-server communication
+- **Copilot Execution**: Spawns `copilot -p "<prompt>" --allow-all-tools` process per message
+- **Mode**: Non-interactive (each message is a separate command)
 
 ### Frontend (HTML + Vanilla JS)
 - **Design**: GitHub dark theme
-- **Componenti**: Header con status, chat container, input box
-- **WebSocket Client**: Connessione automatica al server
-- **Messaggi**: User (blu), Assistant (grigio), System (azzurro), Error (rosso)
+- **Components**: Header with status indicator, chat container, input box
+- **WebSocket Client**: Auto-connects to server
+- **Messages**: User (blue), Assistant (gray), System (cyan), Error (red)
 
 ### Docker Configuration
-**Base Image**: `node:22-slim` (Debian, necessario per copilot CLI binario x64 glibc)
+**Base Image**: `node:22-slim` (Debian-based, required for copilot CLI x64 glibc binary)
 
-**Installazione Copilot CLI**:
+**Copilot CLI Installation**:
 ```dockerfile
 RUN curl -fsSL https://github.com/github/copilot-cli/releases/latest/download/copilot-linux-x64.tar.gz -o /tmp/copilot.tar.gz && \
     tar -xzf /tmp/copilot.tar.gz -C /usr/local/bin
 ```
 
-**Variabili d'ambiente richieste**:
-- `COPILOT_GITHUB_TOKEN` (o `GH_TOKEN` o `GITHUB_TOKEN`)
+**Required Environment Variables**:
+- `COPILOT_GITHUB_TOKEN` (or `GH_TOKEN` or `GITHUB_TOKEN`)
 - `TZ=Europe/Rome`
 
-**Volumi montati**:
-- `/home/beelink/.config:/root/.config` (per salvare credenziali Copilot)
+**Mounted Volumes**:
+- `/home/beelink/.config:/root/.config` (to persist Copilot credentials)
 
-## Integrazione con Stack
+## Integration
 
 ### docker-compose.yml
 ```yaml
@@ -75,63 +75,52 @@ copilot-web:
     - wud.watch=true
 ```
 
-### Traefik
-- **URL**: https://copilot.fujipi.com
-- **SSL**: Certificato Cloudflare automatico
-- **Auth**: Nessuna (Authentik rimosso per semplificare)
+### Reverse Proxy (Traefik)
+- **URL**: https://copilot.yourdomain.com
+- **SSL**: Automatic certificate via Let's Encrypt/Cloudflare
+- **Auth**: None (can be added with Authentik or similar)
 
-### Homepage Dashboard
-Aggiunta voce in `/home/beelink/docker/homepage/services.yaml`:
-```yaml
-- Copilot Web:
-    icon: mdi-robot-outline
-    href: https://copilot.fujipi.com
-    description: GitHub Copilot Web Interface
-    container: copilot-web
-```
+## Issues Encountered
 
-## Problemi Incontrati
+### 1. Alpine Linux Incompatibility
+**Problem**: Copilot CLI is a x64 glibc binary, doesn't work on Alpine (musl)
+**Error**: `exec /usr/local/bin/copilot: no such file or directory`
+**Solution**: Changed base image from `node:22-alpine` to `node:22-slim` (Debian)
 
-### 1. Alpine Linux incompatibile
-**Problema**: Copilot CLI è un binario x64 glibc, non funziona su Alpine (musl)
-**Errore**: `exec /usr/local/bin/copilot: no such file or directory`
-**Soluzione**: Cambiato base image da `node:22-alpine` a `node:22-slim` (Debian)
+### 2. Interactive Mode Not Working
+**Problem**: Spawning `copilot` without parameters produced no output
+**Reason**: Copilot requires PTY (pseudo-terminal) for interactive mode
+**Solution**: Used non-interactive mode with `-p "<prompt>"` flag
 
-### 2. Modalità interattiva non funzionante
-**Problema**: Spawning di `copilot` senza parametri non produceva output
-**Motivo**: Copilot richiede PTY (pseudo-terminal) per modalità interattiva
-**Soluzione**: Usato modalità non-interattiva con flag `-p "<prompt>"`
+### 3. GitHub Authentication
+**Critical Issue**: Copilot CLI refuses PAT (Personal Access Token)
+**Error**: `No authentication information found`
+**Failed Attempts**:
+- GitHub classic token (`ghp_...`) ❌
+- Fine-grained PAT ❌
+- Environment variables `GH_TOKEN`, `GITHUB_TOKEN`, `COPILOT_GITHUB_TOKEN` ❌
 
-### 3. Autenticazione GitHub
-**Problema critico**: Copilot CLI rifiuta token PAT (Personal Access Token)
-**Errore**: `No authentication information found`
-**Tentativi falliti**:
-- Token classic GitHub (`ghp_...`) ❌
-- Fine-grained PAT ❌ (non visibile "Copilot" nei permessi senza abbonamento attivo)
-- Variabili d'ambiente `GH_TOKEN`, `GITHUB_TOKEN`, `COPILOT_GITHUB_TOKEN` ❌
+**Root Cause**: Copilot CLI requires full OAuth authentication (like VS Code), doesn't support PAT tokens
 
-**Root cause**: Copilot CLI richiede autenticazione OAuth completa (come VS Code), non supporta token PAT
+## Current Status
 
-## Stato Attuale
-
-### ✅ Completato
-- [x] Backend Node.js funzionante
-- [x] Frontend con design GitHub theme
+### ✅ Completed
+- [x] Node.js backend working
+- [x] Frontend with GitHub theme
 - [x] WebSocket real-time communication
-- [x] Docker build e deploy
-- [x] Integrazione Traefik con SSL
-- [x] Aggiunto a Homepage dashboard
-- [x] Copilot CLI installato nel container
-- [x] Modalità non-interattiva implementata
+- [x] Docker build and deployment
+- [x] Traefik integration with SSL
+- [x] Copilot CLI installed in container
+- [x] Non-interactive mode implemented
 
-### ❌ Non Funzionante
-- [ ] **Autenticazione Copilot CLI** - blocca tutto il funzionamento
+### ❌ Not Working
+- [ ] **Copilot CLI Authentication** - blocks all functionality
 
 ### Container Status
 ```bash
 $ docker compose ps copilot-web
 NAME          IMAGE                    STATUS
-copilot-web   beelink-copilot-web      Up (healthy)
+copilot-web   copilot-web              Up (healthy)
 ```
 
 ### Log Status
@@ -139,129 +128,122 @@ copilot-web   beelink-copilot-web      Up (healthy)
 WebSocket server ready
 Copilot Web UI running on port 3000
 Client connected
-Executing copilot with prompt: <messaggio>
+Executing copilot with prompt: <message>
 Copilot stderr: Error: No authentication information found.
 ```
 
-## Soluzione Necessaria
+## Solution Required
 
-### Opzione 1: Autenticazione Interattiva (CONSIGLIATA)
-Fare login una volta in modo interattivo, salvando le credenziali OAuth:
+### Option 1: Interactive Authentication (RECOMMENDED)
+Authenticate once interactively, saving OAuth credentials:
 
 ```bash
-# Entrare nel container
+# Enter the container
 docker exec -it copilot-web bash
 
-# Avviare copilot
+# Start copilot
 /usr/local/bin/copilot
 
-# Nella CLI, eseguire
+# In the CLI, execute
 /login
 
-# Seguire le istruzioni (codice device flow GitHub)
-# Le credenziali vengono salvate in /root/.config/copilot/
+# Follow instructions (GitHub device code flow)
+# Credentials are saved in /root/.config/copilot/
 ```
 
-**Vantaggi**:
-- Autenticazione OAuth completa
-- Credenziali persistenti (volume montato)
-- Funziona come in VS Code
+**Advantages**:
+- Full OAuth authentication
+- Persistent credentials (mounted volume)
+- Works like VS Code
 
-**Prerequisiti**:
-- Abbonamento GitHub Copilot attivo
-- Accesso al browser per device code flow
+**Prerequisites**:
+- Active GitHub Copilot subscription
+- Browser access for device code flow
 
-### Opzione 2: Rifare con API dirette
-Sostituire Copilot CLI con chiamate dirette alle API:
+### Option 2: Rebuild with Direct APIs
+Replace Copilot CLI with direct API calls:
 - **OpenAI API** (GPT-4o, GPT-4-turbo)
 - **Anthropic API** (Claude Sonnet, Claude Opus)
 
-**Vantaggi**:
-- Nessun problema di autenticazione
-- Più controllo sull'implementazione
-- Più veloce e affidabile
+**Advantages**:
+- No authentication issues
+- More control over implementation
+- Faster and more reliable
 
-**Svantaggi**:
-- Richiede riscrittura backend
-- Necessita API key separata (OpenAI/Anthropic)
-- Perde integrazione con GitHub MCP server
+**Disadvantages**:
+- Requires backend rewrite
+- Needs separate API key (OpenAI/Anthropic)
+- Loses GitHub MCP server integration
 
-## Comandi Utili
+## Useful Commands
 
-### Build e Deploy
+### Build and Deploy
 ```bash
-cd /home/beelink
+cd /path/to/copilot-web
 docker compose build copilot-web
 docker compose up -d copilot-web
 ```
 
 ### Debugging
 ```bash
-# Log real-time
+# Real-time logs
 docker compose logs -f copilot-web
 
-# Log ultimi 50
+# Last 50 lines
 docker compose logs copilot-web --tail 50
 
-# Entrare nel container
+# Enter container
 docker exec -it copilot-web bash
 
-# Test manuale copilot
+# Manual copilot test
 docker exec copilot-web /usr/local/bin/copilot -p "hello" --allow-all-tools
 ```
 
-### Rebuild dopo modifiche
+### Rebuild After Changes
 ```bash
 docker compose build copilot-web && docker compose up -d copilot-web
 ```
 
-## File Modificati
+## Next Steps
 
-1. **Creati**:
-   - `/home/beelink/docker/copilot-web/` (intera directory)
-   - `/home/beelink/.env` (aggiunto `GH_TOKEN`)
-
-2. **Modificati**:
-   - `/home/beelink/docker-compose.yml` (aggiunto servizio copilot-web)
-   - `/home/beelink/docker/homepage/services.yaml` (aggiunta voce Copilot Web)
-
-## Prossimi Passi
-
-1. **Autenticare Copilot CLI** (opzione 1)
+1. **Authenticate Copilot CLI** (option 1)
    ```bash
    docker exec -it copilot-web bash
    /usr/local/bin/copilot
-   # Poi /login
+   # Then /login
    ```
 
-2. **Testare funzionamento**
-   - Aprire https://copilot.fujipi.com
-   - Inviare messaggio "come funziona docker?"
-   - Verificare risposta
+2. **Test Functionality**
+   - Open https://copilot.yourdomain.com
+   - Send message "how does docker work?"
+   - Verify response
 
-3. **Miglioramenti futuri** (opzionali):
-   - Aggiungere Authentik SSO
-   - Streaming delle risposte token-by-token
-   - History delle conversazioni
+3. **Future Improvements** (optional):
+   - Add Authentik SSO
+   - Token-by-token response streaming
+   - Conversation history
    - Multi-session support
-   - Code syntax highlighting nelle risposte
-   - File upload per analisi codice
+   - Code syntax highlighting in responses
+   - File upload for code analysis
 
-## Note Tecniche
+## Technical Notes
 
-- **Porta interna**: 3000
-- **Protocollo WebSocket**: ws:// (http) o wss:// (https) automatico
-- **Timeout spawn**: Nessuno (attende fine risposta Copilot)
-- **Memoria limite**: Non impostato (default Docker)
-- **CPU limite**: Non impostato (default Docker)
+- **Internal Port**: 3000
+- **WebSocket Protocol**: ws:// (http) or wss:// (https) automatic
+- **Spawn Timeout**: None (waits for Copilot response)
+- **Memory Limit**: Not set (Docker default)
+- **CPU Limit**: Not set (Docker default)
 
-## Credenziali e Token
+## License
 
-- **GitHub Token** (attualmente non funzionante): Salvato in `/home/beelink/.env` come `GH_TOKEN`
-- **Copilot Auth** (da configurare): Verrà salvata in `/root/.config/copilot/` nel container
+MIT
+
+## Contributing
+
+Pull requests are welcome! For major changes, please open an issue first to discuss what you would like to change.
 
 ---
 
-**Creato il**: 23 dicembre 2025  
-**Stato**: Funzionante ma bloccato su autenticazione  
-**Prossima azione**: Login interattivo Copilot CLI
+**Created**: December 23, 2025  
+**Status**: Functional but blocked on authentication  
+**Next Action**: Interactive Copilot CLI login
