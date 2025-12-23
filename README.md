@@ -49,9 +49,25 @@ RUN curl -fsSL https://github.com/github/copilot-cli/releases/latest/download/co
 **Mounted Volumes**:
 - `~/.config:/root/.config` (to persist Copilot credentials)
 
-## Integration
+## Deployment
 
-### docker-compose.yml
+### Option 1: Direct Port Mapping (Simplest)
+```yaml
+services:
+  copilot-web:
+    build: ./copilot-web
+    container_name: copilot-web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"  # Access at http://localhost:3000
+    environment:
+      - TZ=America/New_York
+      - GH_TOKEN=${GH_TOKEN}
+    volumes:
+      - ~/.config:/root/.config
+```
+
+### Option 2: With Traefik Reverse Proxy
 ```yaml
 services:
   copilot-web:
@@ -61,17 +77,15 @@ services:
     networks:
       - traefik
     environment:
-      - TZ=America/New_York  # Change to your timezone
+      - TZ=America/New_York
       - GH_TOKEN=${GH_TOKEN}
-      - GITHUB_TOKEN=${GH_TOKEN}
-      - COPILOT_GITHUB_TOKEN=${GH_TOKEN}
     volumes:
-      - ~/.config:/root/.config  # Persist Copilot OAuth credentials
+      - ~/.config:/root/.config
     labels:
       - traefik.enable=true
-      - traefik.http.routers.copilot-web.rule=Host(`copilot.example.com`)  # Change domain
+      - traefik.http.routers.copilot-web.rule=Host(`copilot.example.com`)
       - traefik.http.routers.copilot-web.entrypoints=websecure
-      - traefik.http.routers.copilot-web.tls.certresolver=cloudflare
+      - traefik.http.routers.copilot-web.tls.certresolver=letsencrypt
       - traefik.http.services.copilot-web.loadbalancer.server.port=3000
 
 networks:
@@ -79,10 +93,31 @@ networks:
     external: true
 ```
 
-### Reverse Proxy (Traefik)
-- **URL**: https://copilot.example.com (configure your domain)
-- **SSL**: Automatic certificate via Let's Encrypt/Cloudflare
-- **Auth**: None (can be added with any SSO provider)
+### Option 3: Nginx Reverse Proxy
+```nginx
+server {
+    listen 443 ssl;
+    server_name copilot.example.com;
+
+    ssl_certificate /etc/letsencrypt/live/copilot.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/copilot.example.com/privkey.pem;
+
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+    }
+}
+```
+
+### Option 4: Caddy (Automatic HTTPS)
+```caddy
+copilot.example.com {
+    reverse_proxy localhost:3000
+}
+```
 
 ## Issues Encountered
 
